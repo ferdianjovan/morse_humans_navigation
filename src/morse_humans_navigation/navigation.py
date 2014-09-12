@@ -1,11 +1,8 @@
 #! /usr/bin/env python3.3 
 
+import sys
 import rospy
-import os
-import os.path
 import pymorse
-import time
-import math
 import yaml
 import random
 import threading
@@ -18,6 +15,7 @@ class Human:
         self.morse = morse
         self.total_human = total_human
         self.waypoint_sequences = wp_seqs
+        self.completing_waypoints()
         self.last_10pos = []
         self.range_max = 0.6
         self.waypoint_speed = 1 
@@ -25,12 +23,19 @@ class Human:
         worker = threading.Thread(target=self.move_planning)
         worker.setDaemon(True)
         worker.start()
-
+    
+    def completing_waypoints(self):
+        wp_seqs = []
+        reverse_wp_seqs = []
+        for i in self.waypoint_sequences.values():
+            wp_seqs.append(i)
+            reverse_wp_seqs.append(i[::-1])
+        self.waypoint_sequences = wp_seqs + reverse_wp_seqs
+        
     def move_planning(self):
         while True:
             waypoints = []
             pose = self.get_pose(self.human_id)
-    
             # finding which waypoint human currently is
             wp_name = ""
             for i,j in self.wp_dict.items():
@@ -40,8 +45,6 @@ class Human:
     
             # plan the next waypoint
             print("Human" + str(self.human_id) + " is in " + wp_name)
-            #next_wp_name = self.movement_plan[wp_name][randint(0,
-            #    len(self.movement_plan[wp_name])-1)]
             max_rand = 0
             for val in self.movement_plan[wp_name].values():
                 max_rand += val
@@ -61,18 +64,23 @@ class Human:
                 # get the waypoint sequences   
                 print("Human" + str(self.human_id) + " will be going to " + next_wp_name) 
                 wp_threshold = 0.4
-                next_wp_threshold = 0.4
                 while waypoints == []:
                     for i in self.waypoint_sequences:
-                        if self.is_near(next_wp[0],i[len(i)-1][0],next_wp[1],i[len(i)-1][1],next_wp_threshold):
-                            if self.is_near(pose[0], i[0][0], pose[1], i[0][1], wp_threshold):
+                        init_wp_flag = False
+                        for j in i:
+                            if self.is_near(pose[0],j[0],pose[1],j[1],wp_threshold):
+                                init_wp_flag = True
+                                continue
+                            if init_wp_flag and self.is_near(next_wp[0],j[0],
+                                    next_wp[1],j[1],wp_threshold):
                                 waypoints = i
+                                break
+                        if waypoints != []:
+                            break
+                                    
                     wp_threshold += 0.1
-                    next_wp_threshold += 0.1
                     
                 self.move(waypoints)
-    
-            time.sleep(30)
     
     def get_pose(self,human_id):
         morse_command = ['human' + str(human_id) + '.pose' + str(human_id),
@@ -157,7 +165,7 @@ class Human:
                         wait = False 
                         break
                     else:
-                        time.sleep(0.5)
+                        rospy.sleep(0.5)
 
             morse_command = ['human' + str(self.human_id) + '.motion' +
                     str(self.human_id), 
@@ -169,7 +177,7 @@ class Human:
                     self.waypoint_tolerance, self.waypoint_speed, ))
             worker.setDaemon(True)
             worker.start()
-            time.sleep(0.1)
+            rospy.sleep(0.1)
 
             while self.morse.rpc(morse_command[0], 'get_status') != 'Arrived':
                 if random.randint(0,8) == 4:
@@ -181,78 +189,36 @@ class Human:
                     self.last_10pos = [self.get_pose(self.human_id)] + [[0,0]] * 9
 
                 #self.obstacle_avoidance()
-                time.sleep(0.1)
+                rospy.sleep(0.1)
 
             worker.join()
 
 
-# Get sequences of waypoints for each person. Sequences of waypoints for
-# different persons are in different files.
-def get_waypoints(PATH): 
-    index = 0
-    file_name = "wp" + str(index) + ".txt"
-
-    # 4D dta, an element in the first level is sequences of waypoints for one
-    # person. An element of the second level is a sequence of waypoints for
-    # that particular person. An element on the third level is a waypoint for
-    # the person.
-    waypoints_of_waypoints = []
-
-    while os.path.isfile(PATH + file_name) and os.access(PATH + file_name,
-            os.R_OK):
-        with open(PATH + file_name, "r") as fo:
-            waypoints = []
-            for line in fo:
-                waypoint_sequence = []
-                string_split = line.split()
-                i = 0
-                while i < len(string_split):
-                    waypoint = [float(string_split[i]),
-                            float(string_split[i+1])]
-                    waypoint_sequence.append(waypoint)
-                    i = i + 2
-                waypoints.append(waypoint_sequence)
-                waypoints.append(waypoint_sequence[::-1])
-        waypoints_of_waypoints.append(waypoints)
-        index = index + 1
-        file_name = "wp" + str(index) + ".txt"
-
-    return waypoints_of_waypoints
-
-def get_wp_dict(PATH):
-    if os.path.isfile(PATH + "wp_dict.yaml") and os.access(PATH +
-            "wp_dict.yaml", os.R_OK):
-        return yaml.load(open(PATH + "wp_dict.yaml"))
-
-def get_move_plan(PATH):
-    if os.path.isfile(PATH + "mv_plan.yaml") and os.access(PATH +
-            "mv_plan.yaml", os.R_OK):
-        return yaml.load(open(PATH + "mv_plan.yaml"))
-
-
 if __name__ == "__main__":
     rospy.init_node('morse_humans_navigation') 
-    wp_dict_folder = rospy.get_param("~wp_dict_folder")
-    wp_folder = rospy.get_param("~waypoint_folder")
 
-    waypoints_4d = get_waypoints(wp_folder)
-    wp_dict = get_wp_dict(wp_dict_folder)
-    mv_plan = get_move_plan(wp_dict_folder) 
+    waypoints_4d = yaml.load(open(rospy.get_param("~wp_path")))
+    wp_dict = yaml.load(open(rospy.get_param("~wp_dict_path")))
+    mv_plan = yaml.load(open(rospy.get_param("~mv_plan_path")))
+    human_keyboard = rospy.get_param("~human_keyboard") 
     humans = []
+    
+    if len(waypoints_4d) != len(mv_plan):
+        rospy.loginfo("The number of persons represented by movement planning and waypoints does not match! [Human Controller] will exit...")
+        sys.exit()
 
-    #if pymorse.Morse._asyncore_thread is not None:
-    #    rospy.loginfo("[Human Controller] crikey")
-    #    pymorse.Morse._asyncore_thread.join()
-    #    pymorse.Morse._asyncore_thread = None
     try:
         rospy.loginfo("[Human Controller] is waiting for Morse...")
         with pymorse.Morse() as morse:
+            # deactivate human0's keyboard
+            morse.rpc('simulation', 'deactivate', human_keyboard)
+
             for index in range(len(waypoints_4d)):
-                human = Human(waypoints_4d[index], wp_dict[index], mv_plan[index], morse, index, len(waypoints_4d))
+                human = Human(waypoints_4d[index], wp_dict, mv_plan[index], morse, index, len(waypoints_4d))
                 humans.append(human)
 
             rospy.loginfo("[Human Controller] is running...")
             while True:
-                time.sleep(0.002)
+                rospy.sleep(0.002)
     except Exception as e:
         rospy.loginfo("[Human Controller] " + str(e) + " : failed.")

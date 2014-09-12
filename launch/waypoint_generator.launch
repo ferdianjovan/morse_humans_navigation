@@ -1,15 +1,16 @@
 <launch>
-    <!-- set Waypoint folder and wp_dict -->
+    <!-- set waypoint file and waypoint dictionary file -->
     <arg name="wp_path" default="$(find morse_humans_navigation)/conf/wp.yaml"/>
     <arg name="wp_dict_path" default="$(find morse_humans_navigation)/conf/wp_dict.yaml"/>
-    <arg name="mv_plan_path" default="$(find morse_humans_navigation)/conf/mv_plan.yaml"/>
     <arg name="human_keyboard" default="human0.keyboard0"/>
+    <arg name="human_motion" default="human0.motion0"/>
 
-    <!-- Human Navigation -->
-    <node pkg="morse_humans_navigation" type="navigation.py" name="human_controller" output="screen">
+    <!-- Waypoint Generator -->
+    <node pkg="morse_humans_navigation" type="waypoint_generator.py"
+name="waypoint_generator" output="screen">
         <param name="wp_path" value="$(arg wp_path)" type="string"/>
         <param name="wp_dict_path" value="$(arg wp_dict_path)" type="string"/>
-        <param name="mv_plan_path" value="$(arg mv_plan_path)" type="string"/>
         <param name="human_keyboard" value="$(arg human_keyboard)" type="string"/>
+        <param name="human_motion" value="$(arg human_motion)" type="string"/>
     </node>
 </launch>
