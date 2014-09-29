@@ -28,11 +28,11 @@ Notes
 ============================
 
 All the robots in the simulation must be named in the form
-
-  human[number]
+    
+    human[number]
 
 and all waypoint class attached to the robots must be named in the form
+    
+    motion[number]
 
-  motion[number]
-
-where the number starts from 0 to the number of robots in the simulation minus one.
+where [number] starts from 0 to the number of robots in the simulation minus one.
