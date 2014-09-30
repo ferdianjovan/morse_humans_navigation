@@ -26,6 +26,7 @@ To set up new behaviours for robots regarding their movements in the simulation,
     strands_morse simulation up and running
     
 To start constructing waypoints, launch:
+
     roslaunch morse_humans_navigation waypoint_generator.launch
     
 Please add Pose class to Scitosa5 robot described in Notes section. Other instructions are stated in the window running the waypoint generator launch file.
