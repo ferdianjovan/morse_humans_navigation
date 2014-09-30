@@ -15,13 +15,20 @@ Before you can launch this package, you need:
     
 One should note that the number of robots with waypoint class attached to them must match with the number of Markov chains defined in mv_plan.yaml and the number of sets of sequences of waypoints defined in wp.yaml.
 
-To start this human_following module, simplly launch:
+To start this human_following module, simply launch:
     
     roslaunch morse_humans_navigation humans_navigation.launch
     
 Configurations
 ==========================
-To set up new behaviours for robots regarding their movements in the simulation, 
+To set up new behaviours for robots regarding their movements in the simulation, you need:
+
+    strands_morse simulation up and running
+    
+To start constructing waypoints, launch:
+    roslaunch morse_humans_navigation waypoint_generator.launch
+    
+Please add Pose class to Scitosa5 robot described in Notes section. Other instructions are stated in the window running the waypoint generator launch file.
     
     
 Notes
@@ -31,8 +38,30 @@ All the robots in the simulation must be named in the form
     
     human[number]
 
-and all waypoint class attached to the robots must be named in the form
+and all waypoint and pose class attached to the robots must be named in the form
     
     motion[number]
-
+    pose[number]
+    
 where [number] starts from 0 to the number of robots in the simulation minus one.
+For example,
+ 
+    human0 = B21()
+    human0.translate(x=-14.28,-9.28,z=0.1)
+    human0.rotate(z=1.6)
+    pose0 = Pose()
+    human0.append(pose0)
+    motion0 = Waypoint() 
+    motion0.properties(ControlType="Position",ObstacleAvoidance=True)
+    motion0.add_service('socket')
+    human0.append(motion0)
+    pose0.add_service('socket')
+    pose0.add_interface('ros')
+    human0.properties(Object = True, Label = "human0")
+
+Also add Pose class to Scitosa5 robot in the simulation as follows: 
+
+    pose = Pose()
+    robot.append(pose)
+    pose.add_interface('ros', topic='/robot_pose')
+    
