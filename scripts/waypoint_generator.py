@@ -3,17 +3,24 @@
 import rospy
 import yaml
 from pymorse import Morse
+from geometry_msgs.msg import Pose, PoseStamped
+
+pose = Pose()
+
+def pose_cb(data):
+    global pose
+    pose = data.pose
 
 if __name__ == '__main__':
     rospy.init_node('waypoint_generator')
     wp_path = rospy.get_param("~wp_path")
     wp_dict_path = rospy.get_param("~wp_dict_path")
-    human_keyboard = rospy.get_param("~human_keyboard")
-    human_motion = rospy.get_param("~human_motion")
+    
+    rospy.Subscriber('/robot_pose', PoseStamped, pose_cb)
     
     with Morse() as morse:
         rospy.loginfo("[Waypoint Generator] is running...")
-        print("Press q to quit, r to record a waypoint, n to insert a new sequence of waypoints for the same person, and c to make waypoints for another person")
+        print("""Press q to quit, r to record a waypoint, n to insert a new sequence of waypoints for the same person, and c to make waypoints or another person""")
         print("Every choice is followed by [ENTER]")
         print("Every 'r' can be followed by waypoint name, ex: r up right door")
         esc = False
@@ -25,12 +32,6 @@ if __name__ == '__main__':
         wp_file = open(wp_path, "w")
         wp_dict_file = open(wp_dict_path, "w")
 
-        # deactivate robot's keyboard and activate human0's keyboard
-        # deactivate waypoint0
-        morse.rpc('simulation', 'deactivate', 'robot.keyboard')
-        morse.rpc('simulation', 'activate', human_keyboard)
-        morse.rpc('simulation', 'deactivate', human_motion)
-        
         while not esc:
             c = input()
             if c[0] == "r":
@@ -38,16 +39,13 @@ if __name__ == '__main__':
                     wp[wp_index] = dict() 
                     wp[wp_index][counter] = []
                     
-                morse_command = ['human' + str(0) + '.pose' + str(0),
-                        'get_local_data']
-                pose = morse.rpc(morse_command[0], morse_command[1])
-                pose = [round(pose['x'],2), round(pose['y'],2)]
-                wp_sequences.append(pose)
+                temp = [round(pose.position.x,2), round(pose.position.y,2)]
+                wp_sequences.append(temp)
                 
                 if len(c) > 1:
                     wp_name = " ".join(c.split()[1:])
                     if wp_name != "" and wp_name not in wp_dict:
-                        wp_dict[wp_name] = pose
+                        wp_dict[wp_name] = temp 
                     
             elif c[0] == "n":
                 wp[wp_index][counter] = wp_sequences

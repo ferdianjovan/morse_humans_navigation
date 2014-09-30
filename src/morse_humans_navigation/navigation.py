@@ -17,9 +17,8 @@ class Human:
         self.waypoint_sequences = wp_seqs
         self.completing_waypoints()
         self.last_10pos = []
-        self.range_max = 0.6
         self.waypoint_speed = 1 
-        self.waypoint_tolerance = 0.5
+        self.waypoint_tolerance = 0.4
         worker = threading.Thread(target=self.move_planning)
         worker.setDaemon(True)
         worker.start()
@@ -33,16 +32,18 @@ class Human:
         self.waypoint_sequences = wp_seqs + reverse_wp_seqs
         
     def move_planning(self):
+        next_wp_name = ""
+        wp_name = ""
         while True:
             waypoints = []
             pose = self.get_pose(self.human_id)
             # finding which waypoint human currently is
-            wp_name = ""
-            for i,j in self.wp_dict.items():
-                if self.is_near(pose[0], j[0], pose[1], j[1], 1):
-                         wp_name = i
-                         break
-    
+            if wp_name == "":
+                for i,j in self.wp_dict.items():
+                    if self.is_near(pose[0], j[0], pose[1], j[1], 0.8):
+                        wp_name = i
+                        break
+
             # plan the next waypoint
             print("Human" + str(self.human_id) + " is in " + wp_name)
             max_rand = 0
@@ -60,8 +61,8 @@ class Human:
 
             next_wp = self.wp_dict[next_wp_name]
     
+            # get the waypoint sequences   
             if next_wp_name != wp_name:
-                # get the waypoint sequences   
                 print("Human" + str(self.human_id) + " will be going to " + next_wp_name) 
                 wp_threshold = 0.4
                 while waypoints == []:
@@ -81,6 +82,9 @@ class Human:
                     wp_threshold += 0.1
                     
                 self.move(waypoints)
+                wp_name = next_wp_name
+
+            rospy.sleep(30)
     
     def get_pose(self,human_id):
         morse_command = ['human' + str(human_id) + '.pose' + str(human_id),
@@ -97,7 +101,7 @@ class Human:
     
     def stuck(self):
         really_stuck = True 
-    
+
         for i in range(0,len(self.last_10pos) - 1):
             if abs(self.last_10pos[i][0] - self.last_10pos[i+1][0]) > 0.1 or \
             abs(self.last_10pos[i][1] - self.last_10pos[i+1][1]) > 0.1: 
@@ -106,75 +110,19 @@ class Human:
     
         return really_stuck
 
-    def obstacle_avoidance(self):
-        obr = False; obl = False; obml = False; obmr = False
-        morse_command = ['human' + str(self.human_id) + '.laser' + str(self.human_id), 'get_local_data']
-        range_list = self.morse.rpc(morse_command[0], morse_command[1])['range_list']
-        morse_command = 'human' + str(self.human_id) + '.motion' + str(self.human_id)
-
-        for i in range(2, len(range_list) - 2):
-            if range_list[i] < self.range_max and i <= len(range_list) / 2:
-                obr = True
-            elif range_list[i] < self.range_max and i > len(range_list) / 2:
-                obl = True
-
-        if range_list[0] < self.range_max:
-            obmr = True
-        if range_list[len(range_list) - 2] < self.range_max:
-            obml = True
-
-        if obr or obl or obmr or obml:
-            rot = 0
-            spd = 0
-
-            if self.morse.rpc(morse_command, 'get_status') == 'Transit':
-                self.morse.rpc(morse_command, 'stop')
-
-            if (obmr or obml) and not obr and not obl:
-                spd = 0.05
-            elif not obmr and obl and ((not obr and not obml) or obr):
-                rot = -0.1
-            elif obr and not obl and (obmr or obml):
-                rot = 0.1
-                spd = 0.05
-            elif obl and not obr and (obmr or obml):
-                rot = -0.1
-                spd = 0.05
-            else:
-                rot = 0.1
-
-            self.morse.rpc('human' + str(self.human_id), 'move', spd, rot)
-        elif self.morse.rpc(morse_command, 'get_status') == 'Stop':
-                morse.rpc(morse_command, 'resume')
+    #def rotate(self):
 
     def move(self,waypoints):
         self.last_10pos = [self.get_pose(self.human_id)] + [[0,0]] * 9
-        wait = True 
 
         for waypoint in waypoints:
-            # check whether there is a person in the next waypoint, if there is then wait.
-            while wait:
-                if self.total_human == 1:
-                    break
-                for i in range(self.total_human):
-                    if i == self.human_id:
-                        continue
-                    other_pose = self.get_pose(i) 
-                    if not self.is_near(waypoint[0], other_pose[0],
-                            waypoint[1], other_pose[1], 1):
-                        wait = False 
-                        break
-                    else:
-                        rospy.sleep(0.5)
-
             morse_command = ['human' + str(self.human_id) + '.motion' +
-                    str(self.human_id), 
-                        'goto']
-            #  Without Thread, morse.rpc for motion goto holds until the object
-            #  arrives to the target position
-            worker = threading.Thread(target=self.morse.rpc, args=(morse_command[0],
-                    morse_command[1], waypoint[0], waypoint[1], 0.0,
-                    self.waypoint_tolerance, self.waypoint_speed, ))
+                    str(self.human_id), 'goto']
+            
+            worker = threading.Thread(target=self.morse.rpc,
+                    args=(morse_command[0], morse_command[1], waypoint[0],
+                        waypoint[1], 0, self.waypoint_tolerance,
+                        self.waypoint_speed, ))
             worker.setDaemon(True)
             worker.start()
             rospy.sleep(0.1)
@@ -185,10 +133,9 @@ class Human:
                         [self.get_pose(self.human_id)]
 
                 if self.stuck():
-                    #self.morse.rpc('human' + str(self.human_id), 'move', 0, 3.2)
+                    print("Human" + str(self.human_id) + " is STUCK!")
                     self.last_10pos = [self.get_pose(self.human_id)] + [[0,0]] * 9
 
-                #self.obstacle_avoidance()
                 rospy.sleep(0.1)
 
             worker.join()
@@ -200,25 +147,23 @@ if __name__ == "__main__":
     waypoints_4d = yaml.load(open(rospy.get_param("~wp_path")))
     wp_dict = yaml.load(open(rospy.get_param("~wp_dict_path")))
     mv_plan = yaml.load(open(rospy.get_param("~mv_plan_path")))
-    human_keyboard = rospy.get_param("~human_keyboard") 
     humans = []
     
     if len(waypoints_4d) != len(mv_plan):
-        rospy.loginfo("The number of persons represented by movement planning and waypoints does not match! [Human Controller] will exit...")
+        rospy.loginfo("""The number of persons represented by movement planning
+                and waypoints does not match! [Human Navigation] will
+                exit...""")
         sys.exit()
 
     try:
-        rospy.loginfo("[Human Controller] is waiting for Morse...")
+        rospy.loginfo("[Human Navigation] is waiting for Morse...")
         with pymorse.Morse() as morse:
-            # deactivate human0's keyboard
-            morse.rpc('simulation', 'deactivate', human_keyboard)
-
             for index in range(len(waypoints_4d)):
                 human = Human(waypoints_4d[index], wp_dict, mv_plan[index], morse, index, len(waypoints_4d))
                 humans.append(human)
 
-            rospy.loginfo("[Human Controller] is running...")
+            rospy.loginfo("[Human Navigation] is running...")
             while True:
                 rospy.sleep(0.002)
     except Exception as e:
-        rospy.loginfo("[Human Controller] " + str(e) + " : failed.")
+        rospy.loginfo("[Human Navigation] " + str(e) + " : failed.")
