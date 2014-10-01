@@ -56,7 +56,6 @@ For example,
     motion0.properties(ControlType="Position",ObstacleAvoidance=True)
     motion0.add_service('socket')
     human0.append(motion0)
-    pose0.add_service('socket')
     pose0.add_interface('ros')
     human0.properties(Object = True, Label = "human0")
 
